@@ -1,0 +1,19 @@
+main: design.sxxov.imagination.Imagination
+name: Imagination
+version: 0.0.0
+api-version: 1.17
+depend: [Multiverse-Core]
+softdepend: [WorldEdit]
+commands:
+  imagination:
+    description: "Imagination"
+    aliases: [imagine, img]
+    permission: imagination.imagine
+    usage: "/<command> [to|reality] [world]\nDo `/<command> help` for more info"
+    permission-message: "You do not have permission to imagine"
+  reality:
+    description: "Alias for `/imagination reality`"
+    aliases: [real, rel]
+    permission: imagination.reality
+    usage: "/<command>"
+    permission-message: "You do not have permission to reenter reality"
