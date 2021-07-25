@@ -2,11 +2,13 @@ package design.sxxov.imagination.core.commander.command;
 
 import com.onarandombox.MultiverseCore.api.MultiverseWorld;
 
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import design.sxxov.imagination.Imagination;
 import design.sxxov.imagination.core.commander.CommanderReplyBuilder;
 import design.sxxov.imagination.core.multiverser.Multiverser;
+import design.sxxov.imagination.events.ImaginationExitEvent;
 
 public class RealityCommand extends Command {
 
@@ -27,14 +29,18 @@ public class RealityCommand extends Command {
 			return true;
 		}
 
-		MultiverseWorld world = Multiverser.getMVWorld(Command.getSourceWorldName(player), true);
+		MultiverseWorld sourceWorld = Multiverser.getMVWorld(Command.getSourceWorldName(player), true);
+		MultiverseWorld targetWorld = Multiverser.getMVWorld(player.getWorld());
 
 		new CommanderReplyBuilder(player)
 			.info("Snapping back to reality…")
 			.build()
 			.send();
 			
-		Command.teleportToWorld(player, world);
+		Command.teleportToWorld(player, sourceWorld);
+
+		ImaginationExitEvent event = new ImaginationExitEvent(player, targetWorld);
+		Bukkit.getServer().getPluginManager().callEvent(event);
 
 		return true;
 	}

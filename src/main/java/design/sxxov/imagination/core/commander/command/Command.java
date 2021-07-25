@@ -7,6 +7,7 @@ import java.util.WeakHashMap;
 
 import com.onarandombox.MultiverseCore.api.MultiverseWorld;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
@@ -15,6 +16,7 @@ import design.sxxov.imagination.core.commander.CommanderReply;
 import design.sxxov.imagination.core.commander.CommanderReplyBuilder;
 import design.sxxov.imagination.core.configurator.Configurator;
 import design.sxxov.imagination.core.multiverser.Multiverser;
+import design.sxxov.imagination.events.ImaginationTeleportEvent;
 
 public abstract class Command {
 	private static WeakHashMap<Player, String> playerToWorldName = new WeakHashMap<>();
@@ -139,6 +141,9 @@ public abstract class Command {
 	protected static void teleportToWorld(Player player, MultiverseWorld world) {
 		Location location = player.getLocation().clone();
 		location.setWorld(world.getCBWorld());
+
+		ImaginationTeleportEvent event = new ImaginationTeleportEvent(player, world);
+		Bukkit.getServer().getPluginManager().callEvent(event);
 
 		player.teleport(location);
 	}

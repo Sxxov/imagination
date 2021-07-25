@@ -4,11 +4,13 @@ import java.util.List;
 
 import com.onarandombox.MultiverseCore.api.MultiverseWorld;
 
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import design.sxxov.imagination.Imagination;
 import design.sxxov.imagination.core.commander.CommanderReplyBuilder;
 import design.sxxov.imagination.core.multiverser.Multiverser;
+import design.sxxov.imagination.events.ImaginationEnterEvent;
 
 public class ToCommand extends Command {
 	@Override
@@ -44,9 +46,9 @@ public class ToCommand extends Command {
 			return new RealityCommand().run(player, command, label, args, ctx);
 		}
 
-		MultiverseWorld world = Multiverser.getMVWorld(args[0], true);
+		MultiverseWorld targetWorld = Multiverser.getMVWorld(args[0], true);
 
-		if (world == null) {
+		if (targetWorld == null) {
 			new CommanderReplyBuilder(player)
 				.error("Invalid world")
 				.info(Command.getFormattedCommandListReply(player, targetWorldNames))
@@ -57,11 +59,16 @@ public class ToCommand extends Command {
 		}
 
 		new CommanderReplyBuilder(player)
-				.info("Imagining " + world.getAlias() + "…")
+				.info("Imagining " + targetWorld.getAlias() + "…")
 				.build()
 				.send();
+		
+		MultiverseWorld sourceWorld = Multiverser.getMVWorld(player.getWorld());
 
-		Command.teleportToWorld(player, world);
+		Command.teleportToWorld(player, targetWorld);
+
+		ImaginationEnterEvent event = new ImaginationEnterEvent(player, sourceWorld);
+		Bukkit.getServer().getPluginManager().callEvent(event);
 
 		return true;
 	}
