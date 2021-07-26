@@ -1,3 +1,6 @@
 imaginations:
   world: imagination/world
   # _: [mine, craft]
+imagination:
+  playerMovement:
+    radius: 64
