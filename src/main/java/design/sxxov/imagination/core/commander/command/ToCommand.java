@@ -65,6 +65,16 @@ public class ToCommand extends Command {
 		
 		MultiverseWorld sourceWorld = Multiverser.getMVWorld(player.getWorld());
 
+		ctx.synchronizers
+			.stream()
+				.filter(
+				(synchronizer) -> synchronizer.getTargetWorldName().equals(targetWorld.getName())
+			)
+			.findAny()
+			.orElseThrow()
+			.getChangeManager()
+			.applySync(targetWorld.getCBWorld());
+
 		Command.teleportToWorld(player, targetWorld);
 
 		ImaginationEnterEvent event = new ImaginationEnterEvent(player, sourceWorld);
