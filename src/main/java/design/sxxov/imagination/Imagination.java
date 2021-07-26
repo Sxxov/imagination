@@ -2,29 +2,34 @@ package design.sxxov.imagination;
 
 import java.rmi.UnexpectedException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
+import java.util.UUID;
 import java.util.logging.Logger;
 
 import com.onarandombox.MultiverseCore.api.MultiverseWorld;
 
-import org.bukkit.World;
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.generator.ChunkGenerator;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import design.sxxov.imagination.core.commander.Commander;
 import design.sxxov.imagination.core.configurator.Configurator;
-import design.sxxov.imagination.core.generator.VoidableChunkGenerator;
+import design.sxxov.imagination.core.movementer.Movementer;
 import design.sxxov.imagination.core.multiverser.Multiverser;
 import design.sxxov.imagination.core.synchronizer.Synchronizer;
 
 public class Imagination extends JavaPlugin implements Listener {
     public static Logger logger;
     public ArrayList<Synchronizer> synchronizers = new ArrayList<>();
+    public HashMap<UUID, ArrayList<Movementer>> uuidToMovementers = new HashMap<>();
 
     @Override
     public void onEnable() {
@@ -34,44 +39,25 @@ public class Imagination extends JavaPlugin implements Listener {
         Multiverser.load();
 
         this.configure();
+        for (Player player : this.getServer().getOnlinePlayers()) {
+            this.registerMovementers(player);
+        }
 
         Imagination.logger.info("Imagination running wild!");
+        Bukkit.getServer().getPluginManager().registerEvents(this, this);
     }
 
     @Override
     public void onDisable() {
-        this.destroy();
-        Imagination.logger.info("Remembered imaginations, goodnight.");
-    }
-
-    @Override
-    public ChunkGenerator getDefaultWorldGenerator(String worldName, String id) {
-        for (Map.Entry<String, List<String>> entry : Configurator.imaginations.entrySet()) {
-            String sourceWorldName = entry.getKey();
-
-            if (worldName.equals(sourceWorldName)) {
-                break;
-            }
-
-            for (String targetWorldName : entry.getValue()) {
-                if (worldName.equals(targetWorldName)) {
-                    MultiverseWorld sourceWorld = Multiverser.getMVWorld(sourceWorldName);
-
-                    if (sourceWorld == null) {
-                        throw new IllegalStateException("Attempted to get default world generator of source world, but the source world doesn't exist");
-                    }
-
-                    return new VoidableChunkGenerator() {
-                        @Override
-                        public boolean isVoidChunk(World world, Random random, int x, int z, BiomeGrid biome) {
-                            return sourceWorld.getCBWorld().isChunkLoaded(x, z);
-                        }
-                    };
-                }
-            }
+        for (Player player : this.getServer().getOnlinePlayers()) {
+            this.destroyMovementers(player);
         }
+
+        this.uuidToMovementers = new HashMap<>();
+
+        this.destroySynchronizers();
         
-        return super.getDefaultWorldGenerator(worldName, id);
+        Imagination.logger.info("Remembered imaginations, goodnight.");
     }
 
     public void configure() {
@@ -105,7 +91,7 @@ public class Imagination extends JavaPlugin implements Listener {
         }
     }
 
-    public void destroy() {
+    public void destroySynchronizers() {
         for (Synchronizer synchronizer : this.synchronizers) {
             synchronizer.flush();
             synchronizer.destroy();
@@ -125,7 +111,49 @@ public class Imagination extends JavaPlugin implements Listener {
         return super.onCommand(sender, command, label, args);
     }
 
-    public ClassLoader getPluginClassLoader() {
-        return this.getClassLoader();
+    private void registerMovementers(Player player) {
+        ArrayList<Movementer> movementers = new ArrayList<>();
+
+        for (Map.Entry<String, List<String>> entry : Configurator.imaginations.entrySet()) {
+            for (String targetWorldName : entry.getValue()) {
+                new Movementer(
+                        this,
+                        player,
+                        targetWorldName,
+                        Configurator.imagination.playerMovement.radius
+                );
+            }
+        }
+
+        this.uuidToMovementers.put(
+            player.getUniqueId(), 
+            movementers
+        );
+    }
+
+    private void destroyMovementers(Player player) {
+        UUID uuid = player.getUniqueId();
+        ArrayList<Movementer> movementers = this.uuidToMovementers.get(uuid);
+
+        // broken state, probably a reload xd
+        if (movementers == null) {
+            return;
+        }
+
+        for (Movementer movementer : movementers) {
+            movementer.destroy();
+        }
+
+        this.uuidToMovementers.remove(uuid);
+    } 
+    
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        this.registerMovementers(event.getPlayer());
+    }
+
+    @EventHandler
+    public void onPlayerLeave(PlayerQuitEvent event) {
+        this.destroyMovementers(event.getPlayer());
     }
 }
