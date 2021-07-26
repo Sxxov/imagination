@@ -12,6 +12,7 @@ import com.sk89q.worldedit.event.extent.EditSessionEvent;
 import com.sk89q.worldedit.util.eventbus.Subscribe;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -223,11 +224,12 @@ public class Synchronizer implements Listener {
 	@EventHandler
 	public void onChunkLoad(ChunkLoadEvent event) {
 		World world = event.getWorld();
-		Long chunkId = SynchronizerChunk.getId(event.getChunk());
+		Chunk chunk = event.getChunk();
+		Long chunkId = SynchronizerChunk.getId(chunk);
 
 		if (world.getName().equals(this.targetWorldName)) {
 			// this.changeManager.applyAsync(world, chunkId);
-			this.changeManager.applySync(world, chunkId);
+			this.changeManager.applySync(world, chunkId, chunk);
 		}
 
 		if (world.getName().equals(this.sourceWorldName)) {

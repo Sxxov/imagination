@@ -67,15 +67,17 @@ public class SynchronizerChangeManager {
 			: chunkIdToChanges.entrySet()) {
 			long chunkId = entry.getKey();
 			ArrayList<SynchronizerChange> changes = entry.getValue();
-
-			chunkIdToChanges.remove(chunkId);
 			
-			future.thenRunAsync(() -> this.applyAsync(
+			future.thenRun(() -> this.applyAsync(
 				world,
 				chunkId,
 				changes
 			));
 		}
+
+		future.thenRun(() -> {
+			chunkIdToChanges.clear();
+		});
 
 		return future;
 	}
@@ -121,6 +123,25 @@ public class SynchronizerChangeManager {
 			chunkId,
 			chunkIdToChanges.get(chunkId),
 			world.getChunkAt(chunkCoords[0], chunkCoords[1])
+		);
+
+		chunkIdToChanges.remove(chunkId);
+	}
+
+	public void applySync(World world, Long chunkId, Chunk chunk) {
+		HashMap<Long, ArrayList<SynchronizerChange>> chunkIdToChanges = (
+			this.targetWorldToChunkIdToChangesBuffer.get(world)
+		);
+
+		if (chunkIdToChanges == null) {
+			return;
+		}
+
+		this.applySync(
+			world,
+			chunkId,
+			chunkIdToChanges.get(chunkId),
+			chunk
 		);
 
 		chunkIdToChanges.remove(chunkId);
