@@ -1,6 +1,7 @@
 package design.sxxov.imagination.core.synchronizer;
 
 import java.util.HashMap;
+import java.util.List;
 
 import javax.annotation.Nullable;
 
@@ -11,8 +12,12 @@ import com.sk89q.worldedit.event.extent.EditSessionEvent;
 import com.sk89q.worldedit.util.eventbus.Subscribe;
 
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.entity.EntityType;
 import org.bukkit.event.Cancellable;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
@@ -51,19 +56,29 @@ import design.sxxov.imagination.core.worldedit.SynchronizeBlockChangeExtent;
 
 public class Synchronizer implements Listener {
 	@Nullable WorldEdit worldEdit;
-	private MultiverseWorld sourceWorld;
-	private MultiverseWorld targetWorld;
-	private Block airBlock;
-	private SynchronizerChunkManager chunkManager;
-	private HashMap<Long, SynchronizerChunk> borrowedChunks = new HashMap<>();
+	protected MultiverseWorld sourceWorld;
+	protected MultiverseWorld targetWorld;
+	protected World sourceWorldCB;
+	protected World targetWorldCB;
+	protected String sourceWorldName;
+	protected String targetWorldName;
+	protected SynchronizerChunkManager chunkManager;
+	protected SynchronizerMutabilityManager mutabilityManager;
+	protected SynchronizerChangeManager changeManager;
+	protected HashMap<Long, SynchronizerChunk> borrowedChunks = new HashMap<>();
 	private Plugin ctx;
 
 	public Synchronizer(Plugin ctx, MultiverseWorld sourceWorld, MultiverseWorld targetWorld) {
 		this.ctx = ctx;
 		this.sourceWorld = sourceWorld;
 		this.targetWorld = targetWorld;
-		this.airBlock = this.targetWorld.getCBWorld().getBlockAt(0, 255, 0);
-		this.chunkManager = new SynchronizerChunkManager(ctx, targetWorld.getName());
+		this.sourceWorldCB = sourceWorld.getCBWorld();
+		this.targetWorldCB = targetWorld.getCBWorld();
+		this.sourceWorldName = sourceWorld.getName();
+		this.targetWorldName = targetWorld.getName();
+		this.chunkManager = new SynchronizerChunkManager(this.ctx, targetWorld.getName());
+		this.mutabilityManager = new SynchronizerMutabilityManager(this.ctx);
+		this.changeManager = new SynchronizerChangeManager(this.chunkManager, this.mutabilityManager);
 
 		if (Bukkit.getServer().getPluginManager().getPlugin("WorldEdit") != null) {
 			this.worldEdit = WorldEdit.getInstance();
@@ -79,43 +94,8 @@ public class Synchronizer implements Listener {
 	}
 
 	public void flush() {
+		this.changeManager.applyAsync(this.targetWorldCB);
 		this.chunkManager.flush();
-	}
-
-	public void synchronizeBlock(Block sourceBlock) {
-		Block targetBlock = new Location(
-			this.targetWorld.getCBWorld(), 
-			sourceBlock.getX(),
-			sourceBlock.getY(),
-			sourceBlock.getZ()
-		)
-			.getBlock();
-
-		targetBlock.setBlockData(sourceBlock.getBlockData());
-	}
-
-	public void whitelistBlock(Block targetBlock) {
-		long id = SynchronizerChunk.getId(targetBlock.getChunk());
-
-		this.chunkManager.get(id).blocks.add(new int[] {
-			targetBlock.getX(),
-			targetBlock.getY(),
-			targetBlock.getZ()
-		});
-		this.chunkManager.dirty(id);
-	}
-
-	public void blacklistBlock(Block targetBlock) {
-		long id = SynchronizerChunk.getId(targetBlock.getChunk());
-
-		this.chunkManager.get(id).blocks.removeIf(
-			(coords) -> (
-				coords[0] == targetBlock.getX() 
-				&& coords[1] == targetBlock.getY()
-				&& coords[2] == targetBlock.getZ()
-			)
-		);
-		this.chunkManager.dirty(id);
 	}
 
 	@Subscribe
@@ -139,232 +119,42 @@ public class Synchronizer implements Listener {
 		}
 	}
 
-	private void onBlockGeneric(Cancellable event, Block block) {
-		if (this.shouldBeSynchronized(block)) {
-			this.synchronizeBlock(block);
-		}
-
-		boolean shouldBeCancelled = this.shouldBeCancelled(block);
-
-		if (shouldBeCancelled) {
-			event.setCancelled(true);
-		}
-	}
-
-	private void onBlocksGeneric(Cancellable event, Iterable<Block> blocks) {
-		for (Block block : blocks) {
-			if (this.shouldBeSynchronized(block)) {
-				this.synchronizeBlock(block);
-			}
-	
-			if (this.shouldBeCancelled(block)) {
-				event.setCancelled(true);
-
-				return;
-			}
-		}
-	}
-	
-	// @EventHandler
-	// public void onBlockPhysics(BlockPhysicsEvent event) {
-	// 	this.onBlockGeneric(event, event.getBlock());
-	// }
-	
-	@EventHandler
-	public void onBlockPlace(BlockPlaceEvent event) {
-		Block block = event.getBlock();
+	/**
+	 * @return true if synchronized, false if not
+	 */
+	private boolean onGeneric(Block block, @Nullable Material synchronizeReplacement) {
+		Long chunkId = SynchronizerChunk.getId(
+			SynchronizerChunk.getChunkCoord(block.getX()),
+			SynchronizerChunk.getChunkCoord(block.getZ())
+		);
 
 		if (this.shouldBeSynchronized(block)) {
-			this.synchronizeBlock(block);
-		}
-
-		if (this.shouldBeWhitelisted(block)) {
-			this.whitelistBlock(block);
-		}
-
-		if (this.shouldBeBlacklisted(block)) {
-			this.blacklistBlock(block);
-		}
-	}
-
-	@EventHandler
-	public void onBrew(BrewEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onBrewingStandFuel(BrewingStandFuelEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onCauldronLevelChange(CauldronLevelChangeEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onFluidLevelChange(FluidLevelChangeEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onFurnaceBurn(FurnaceBurnEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onLeavesDecay(LeavesDecayEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onMoistureChange(MoistureChangeEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onSignChange(SignChangeEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onSpongeAbsorb(SpongeAbsorbEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onBlockIgnite(BlockIgniteEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onBlockGrow(BlockGrowEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onBlockFromTo(BlockFromToEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onBlockFertilize(BlockFertilizeEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onBlockFade(BlockFadeEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onBlockDispense(BlockDispenseEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onBlockDamage(BlockDamageEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onBlockCook(BlockCookEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-	}
-
-	@EventHandler
-	public void onChunkLoad(ChunkLoadEvent event) {
-		if (event.getWorld().getName().equals(this.sourceWorld.getName())) {	
-			Long id = SynchronizerChunk.getId(event.getChunk());
-
-			this.chunkManager.hydrate(id);
-		}
-	}
-
-	@EventHandler
-	public void onChunkUnload(ChunkUnloadEvent event) {
-		Long id = SynchronizerChunk.getId(event.getChunk());
-
-		if (this.borrowedChunks.containsKey(id)) {
-			try {
-				this.borrowedChunks.remove(id);
-				this.chunkManager.dirty(id);
-			} catch (IllegalStateException e) {
-				e.printStackTrace();
-			}
-		}
-
-		// todo: this might be triggering on every chunk
-		// which kinda defeats the batching code
-		if (event.isSaveChunk()) {
-			this.chunkManager.flush();
-		}
-	}
-
-	@EventHandler
-	public void onBlockPistonExtend(BlockPistonExtendEvent event) {
-		this.onBlocksGeneric(event, event.getBlocks());
-	}
-	
-	@EventHandler
-    public void onBlockBurn(BlockBurnEvent event) {
-		this.onBlockGeneric(event, event.getBlock());
-    }
-
-	@EventHandler
-    public void onBlockExplode(BlockExplodeEvent event) {
-		this.onBlocksGeneric(event, event.blockList());
-    }
-
-	@EventHandler
-    public void onEntityExplode(EntityExplodeEvent event) {
-		this.onBlocksGeneric(event, event.blockList());
-    }
-
-	@EventHandler
-    public void onBlockBreak(BlockBreakEvent event) {
-		Block block = event.getBlock();
-
-		if (this.shouldBeSynchronized(block)) {
-			this.synchronizeBlock(this.airBlock);
-		}
-
-		if (this.shouldBeCancelled(block)) {
-			event.setCancelled(true);
-			Command.getBlockCancelledReply(event.getPlayer()).scheduleNextTickSingleton(this.ctx);
-		}
-    }
-
-	public boolean shouldBeBlacklisted(Block block) {
-		return this.isFromSourceWorld(block);
-	}
-
-	public boolean shouldBeWhitelisted(Block block) {
-		return this.isFromTargetWorld(block);
-	}
-
-	public boolean shouldBeSynchronized(Block block) {
-		return this.isFromSourceWorld(block);
-	}
-
-	public boolean shouldBeCancelled(Block block) {
-		if (this.isFromTargetWorld(block)) {
-			Location blockLocation = block.getLocation();
-			long id = SynchronizerChunk.getId(
-				SynchronizerChunk.getChunkCoord(blockLocation.getBlockX()),
-				SynchronizerChunk.getChunkCoord(blockLocation.getBlockZ())
-			);
-
-			try {
-				for (int[] coord : this.chunkManager.get(id).blocks) {
-					if (coord[0] == block.getX()
-						&& coord[1] == block.getY()
-						&& coord[2] == block.getZ()) {
-						return false;
-					}
-				};
-			} catch (IllegalStateException e) {
-				e.printStackTrace();
+			if (synchronizeReplacement == null) {
+				this.changeManager.batch(
+					new SynchronizerChange<BlockData>(
+						new int[] {
+							block.getX(),
+							block.getY(),
+							block.getZ(),
+						},
+						chunkId,
+						this.targetWorldCB,
+						block.getBlockData()
+					)
+				);
+			} else {
+				this.changeManager.batch(
+					new SynchronizerChange<Material>(
+						new int[] {
+							block.getX(),
+							block.getY(),
+							block.getZ(),
+						},
+						chunkId,
+						this.targetWorldCB,
+						synchronizeReplacement
+					)
+				);
 			}
 
 			return true;
@@ -372,18 +162,299 @@ public class Synchronizer implements Listener {
 
 		return false;
 	}
-	
-	// TODO: this might be causing chunk loads
-	private boolean isFromSourceWorld(Block block) {
-		return this.sourceWorld.getName().equals(block.getWorld().getName());
+
+	/**
+	 * @return true if cancelled, false if not
+	 */
+	private boolean onCancellableGeneric(Cancellable event, Block block, Material synchronizeReplacement) {
+		boolean synced = this.onGeneric(block, synchronizeReplacement);
+
+		if (synced) {
+			return false;
+		}
+		
+		if (this.shouldBeCancelled(block)) {
+			event.setCancelled(true);
+
+			return true;
+		}
+
+		return false;
 	}
 
-	// TODO: this might be causing chunk loads
+	
+	/**
+	 * @return true if cancelled, false if not
+	 */
+	private boolean onCancellableGeneric(Cancellable event, Iterable<Block> blocks, Material synchronizeReplacement) {
+		for (Block block : blocks) {
+			boolean isCancelled = this.onCancellableGeneric(event, block, synchronizeReplacement);
+
+			if (isCancelled) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * @return true if synchronized, false if not
+	 */
+	private boolean onGeneric(Block block) {
+		return this.onGeneric(block, null);
+	}
+
+	/**
+	 * @return true if cancelled, false if not
+	 */
+	private boolean onCancellableGeneric(Cancellable event, Block block) {
+		return this.onCancellableGeneric(event, block, null);
+	}
+
+	/**
+	 * @return true if cancelled, false if not
+	 */
+	private boolean onCancellableGeneric(Cancellable event, Iterable<Block> blocks) {
+		return this.onCancellableGeneric(event, blocks, null);
+	}
+
+	
+	@EventHandler
+	public void onChunkLoad(ChunkLoadEvent event) {
+		World world = event.getWorld();
+		Long chunkId = SynchronizerChunk.getId(event.getChunk());
+
+		if (world.getName().equals(this.targetWorldName)) {
+			// this.changeManager.applyAsync(world, chunkId);
+			this.changeManager.applySync(world, chunkId);
+		}
+
+		if (world.getName().equals(this.sourceWorldName)) {
+			this.chunkManager.hydrate(chunkId);
+		}
+	}
+
+	@EventHandler
+	public void onChunkUnload(ChunkUnloadEvent event) {
+		World world = event.getWorld();
+		Long chunkId = SynchronizerChunk.getId(event.getChunk());
+
+		if (world.getName().equals(this.sourceWorldName)) {
+			this.changeManager.applyAsync(world, chunkId);
+		}
+	}
+	
+	@EventHandler
+	public void onBlockPlace(BlockPlaceEvent event) {
+		Block block = event.getBlock();
+
+		this.onGeneric(block);
+
+		if (this.isFromTargetWorld(block)) {
+			this.mutabilityManager.setMutable(block);
+		}
+	}
+
+	@EventHandler
+    public void onBlockBreak(BlockBreakEvent event) {
+		Block block = event.getBlock();
+
+		Long chunkId = SynchronizerChunk.getId(
+			SynchronizerChunk.getChunkCoord(block.getX()),
+			SynchronizerChunk.getChunkCoord(block.getZ())
+		);
+
+		if (this.shouldBeSynchronized(block)) {
+			this.changeManager.batch(
+				new SynchronizerChange<Material>(
+					new int[] {
+						block.getX(),
+						block.getY(),
+						block.getZ(),
+					},
+					chunkId,
+					this.targetWorldCB,
+					Material.AIR
+				)
+			);
+
+			return;
+		}
+		
+		if (this.shouldBeCancelled(block)) {
+			event.setCancelled(true);
+			Command.getBlockCancelledReply(event.getPlayer()).scheduleNextTickSingleton(this.ctx);
+		}
+    }
+
+	//#region Miscellanious events
+
+	@EventHandler
+	public void onBrew(BrewEvent event) {
+		this.onCancellableGeneric(event, event.getBlock());
+	}
+
+	@EventHandler
+	public void onBrewingStandFuel(BrewingStandFuelEvent event) {
+		this.onCancellableGeneric(event, event.getBlock());
+	}
+
+	@EventHandler
+	public void onCauldronLevelChange(CauldronLevelChangeEvent event) {
+		this.onCancellableGeneric(event, event.getBlock());
+	}
+
+	@EventHandler
+	public void onFluidLevelChange(FluidLevelChangeEvent event) {
+		this.onCancellableGeneric(event, event.getBlock());
+	}
+
+	@EventHandler
+	public void onFurnaceBurn(FurnaceBurnEvent event) {
+		this.onCancellableGeneric(event, event.getBlock());
+	}
+
+	@EventHandler
+	public void onLeavesDecay(LeavesDecayEvent event) {
+		this.onCancellableGeneric(event, event.getBlock(), Material.AIR);
+	}
+
+	@EventHandler
+	public void onMoistureChange(MoistureChangeEvent event) {
+		this.onCancellableGeneric(event, event.getBlock());
+	}
+
+	@EventHandler
+	public void onSignChange(SignChangeEvent event) {
+		this.onCancellableGeneric(event, event.getBlock());
+	}
+
+	@EventHandler
+	public void onSpongeAbsorb(SpongeAbsorbEvent event) {
+		List<BlockState> blockStates = event.getBlocks();
+
+		for (BlockState blockState : blockStates) {
+			this.onCancellableGeneric(event, blockState.getBlock(), blockState.getType());
+		}
+	}
+
+	@EventHandler
+	public void onBlockIgnite(BlockIgniteEvent event) {
+		this.onCancellableGeneric(event, event.getBlock());
+	}
+
+	@EventHandler
+	public void onBlockGrow(BlockGrowEvent event) {
+		this.onCancellableGeneric(event, event.getBlock());
+	}
+
+	@EventHandler
+	public void onBlockFromTo(BlockFromToEvent event) {
+		this.onCancellableGeneric(event, event.getBlock());
+	}
+
+	@EventHandler
+	public void onBlockFertilize(BlockFertilizeEvent event) {
+		this.onCancellableGeneric(event, event.getBlock());
+	}
+
+	@EventHandler
+	public void onBlockFade(BlockFadeEvent event) {
+		this.onCancellableGeneric(event, event.getBlock());
+	}
+
+	@EventHandler
+	public void onBlockDispense(BlockDispenseEvent event) {
+		this.onCancellableGeneric(event, event.getBlock());
+	}
+
+	@EventHandler
+	public void onBlockDamage(BlockDamageEvent event) {
+		this.onCancellableGeneric(event, event.getBlock());
+	}
+
+	@EventHandler
+	public void onBlockCook(BlockCookEvent event) {
+		this.onCancellableGeneric(event, event.getBlock());
+	}
+
+	@EventHandler
+	public void onBlockPistonExtend(BlockPistonExtendEvent event) {
+		this.onCancellableGeneric(event, event.getBlocks());
+	}
+	
+	@EventHandler
+    public void onBlockBurn(BlockBurnEvent event) {
+		this.onCancellableGeneric(event, event.getBlock());
+    }
+
+	@EventHandler
+    public void onBlockExplode(BlockExplodeEvent event) {
+		this.onCancellableGeneric(event, event.getBlock(), Material.AIR);
+		this.onCancellableGeneric(event, event.blockList(), Material.AIR);
+    }
+
+	@EventHandler
+    public void onEntityExplode(EntityExplodeEvent event) {
+		if (event.getEntityType() == EntityType.PRIMED_TNT) {
+			this.onCancellableGeneric(event, event.getLocation().getBlock(), Material.AIR);
+		}
+
+		this.onCancellableGeneric(event, event.blockList(), Material.AIR);
+    }
+
+	//#endregion Miscellanious events
+
+	public boolean shouldBeSynchronized(Block block) {
+		return this.isFromSourceWorld(block);
+	}
+
+	public boolean shouldBeCancelled(Block block) {
+		if (this.isFromTargetWorld(block)) {
+			return !SynchronizerMutabilityManager.isMutable(block);
+		}
+
+		return false;
+	}
+	
+	private boolean isFromSourceWorld(Block block) {
+		return this.sourceWorldName.equals(block.getWorld().getName());
+	}
+
 	private boolean isFromTargetWorld(Block block) {
-		return this.targetWorld.getName().equals(block.getWorld().getName());
+		return this.targetWorldName.equals(block.getWorld().getName());
 	}
 
 	public SynchronizerChunkManager getChunkManager() {
 		return this.chunkManager;
+	}
+
+	public SynchronizerChangeManager getChangeManager() {
+		return this.changeManager;
+	}
+
+	public MultiverseWorld getSourceWorld() {
+		return this.sourceWorld;
+	}
+
+	public MultiverseWorld getTargetWorld() {
+		return this.targetWorld;
+	}
+
+	public String getSourceWorldName() {
+		return this.sourceWorldName;
+	}
+
+	public String getTargetWorldName() {
+		return this.targetWorldName;
+	}
+
+	public World getSourceWorldCB() {
+		return this.sourceWorldCB;
+	}
+
+	public World getTargetWorldCB() {
+		return this.targetWorldCB;
 	}
 }
