@@ -95,7 +95,7 @@ public class Synchronizer implements Listener {
 	}
 
 	public void flush() {
-		this.changeManager.applyAsync(this.targetWorldCB);
+		this.changeManager.applySync(this.targetWorldCB);
 		this.chunkManager.flush();
 	}
 
