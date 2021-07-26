@@ -56,12 +56,12 @@ public class CommanderReplyBuilder {
 		String replyMessage = "";
 
 		if (format) replyMessage += "\n";
-		if (format) replyMessage += "§7§l[§8§lImagination§7§l]\n";
+		if (format) replyMessage += "§7§l[§8§lImagination§7§l]\n§r";
 		
 		for (String message : this.messages) {
 			for (String line : message.split("\\n")) {
-				if (format) replyMessage += "    ";
-				replyMessage += line.replace("&(?=(\\d|[abcdefklmnor]))", "§");
+				if (format) replyMessage += "§8—§r";
+				replyMessage += line.replace("&(?=(\\d|[abcdefklmnor]))", "§").trim();
 				replyMessage += "\n";
 			}
 		}
