@@ -17,11 +17,8 @@ import org.jetbrains.annotations.Nullable;
 
 import design.sxxov.imagination.Imagination;
 
-// TODO: rewrite so it loads all the info as metadata on load
-// TODO: then when a block that contains it is broken, catch that & sync it
-// TODO: asyncly
 public class SynchronizerChunkManager {
-	public static final String RELATIVE_CHUNK_DIR = "chunks";
+	private static final String RELATIVE_CHUNK_DIR = "chunks";
 	private Plugin ctx;
 	public String targetWorldName;
 	private HashMap<Long, SynchronizerChunk> pool = new HashMap<>();
