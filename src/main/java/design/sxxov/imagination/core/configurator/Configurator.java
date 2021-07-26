@@ -12,6 +12,7 @@ import design.sxxov.imagination.Imagination;
 
 public class Configurator {
 	public static HashMap<String, List<String>> imaginations = new HashMap<>();
+	public static ConfiguratorImagination imagination;
 
 	public static void reload(Imagination ctx) {
 		ctx.reloadConfig();
@@ -24,6 +25,25 @@ public class Configurator {
         FileConfiguration config = ctx.getConfig();
 
 		Configurator.loadImaginations(config);
+		Configurator.loadImagination(config);
+	}
+
+	private static void loadImagination(FileConfiguration config) {
+		ConfigurationSection section = config.getConfigurationSection("imagination");
+		Configurator.imagination = new ConfiguratorImagination();
+
+		// empty config
+		if (section == null) {
+			return;
+		}
+
+		ConfigurationSection playerMovementSection = section.getConfigurationSection("playerMovement");
+
+		if (playerMovementSection == null) {
+			return;
+		}
+
+		Configurator.imagination.playerMovement.radius = playerMovementSection.getInt("radius");
 	}
 
 	private static void loadImaginations(FileConfiguration config) {
