@@ -54,6 +54,7 @@ public class Multiverser {
 		}
 
 		newWorld.setGameMode(GameMode.CREATIVE);
+		newWorld.getCBWorld().setFullTime(world.getCBWorld().getFullTime());
 
 		return newWorld;
 	}
