@@ -29,7 +29,17 @@ public class SynchronizerChunk implements Serializable {
 	}
 
 	public static long getId(int x, int z) {
-		return z ^ (x << 32);
+		return (x << 32) ^ z;
+	}
+
+	public static int[] getIdCoords(long id) {
+		// 0000000000000000000000000000000011111111111111111111111111111111
+		long mask = (1L << 32) - 1L;
+
+		return new int[] {
+			(int) ((id >> 32) & mask),
+			(int) (id & mask),
+		};
 	}
 
 	public static int getChunkCoord(int coord) {
