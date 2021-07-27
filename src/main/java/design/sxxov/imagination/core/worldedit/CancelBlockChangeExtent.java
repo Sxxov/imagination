@@ -16,6 +16,7 @@ import design.sxxov.imagination.core.synchronizer.SynchronizerChunk;
 public class CancelBlockChangeExtent extends BlockChangeExtent {
 	private Synchronizer synchronizer;
 	private Plugin ctx;
+	private Extent extent;
 
 	public CancelBlockChangeExtent(
 		Extent extent,
@@ -29,12 +30,13 @@ public class CancelBlockChangeExtent extends BlockChangeExtent {
 
 		this.synchronizer = synchronizer;
 		this.ctx = ctx;
+		this.extent = extent;
 	}
 	
 	@Override
 	public <T extends BlockStateHolder<T>> boolean setBlock(BlockVector3 location, T block) throws WorldEditException {
 		if (!this.getIsEnabled()) {
-			return super.setBlock(location, block);
+			return this.extent.setBlock(location, block);
 		}
 
 		int x = location.getBlockX();
@@ -50,7 +52,7 @@ public class CancelBlockChangeExtent extends BlockChangeExtent {
 				if (coord[0] == x
 					&& coord[1] == y
 					&& coord[2] == z) {		
-					return super.setBlock(location, block);
+					return this.extent.setBlock(location, block);
 				}
 			};
 		} catch (IllegalStateException e) {
