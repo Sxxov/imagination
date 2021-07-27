@@ -10,9 +10,11 @@ import org.bukkit.plugin.Plugin;
 public class SynchronizerMutabilityManager {
 	private static final String MUTABLE_METADATA_KEY = "imagination:mutable";
 	private Plugin plugin;
+	private SynchronizerChunkManager chunkManager;
 
-	public SynchronizerMutabilityManager(Plugin plugin) {
+	public SynchronizerMutabilityManager(Plugin plugin, SynchronizerChunkManager chunkManager) {
 		this.plugin = plugin;
+		this.chunkManager = chunkManager;
 	}
 
 	public void setImmutable(Block block) {
@@ -20,6 +22,27 @@ public class SynchronizerMutabilityManager {
 			SynchronizerMutabilityManager.MUTABLE_METADATA_KEY,
 			this.plugin
 		);
+
+		int x = block.getX();
+		int y = block.getY();
+		int z = block.getZ();
+
+		long chunkId = SynchronizerChunk.getId(
+			SynchronizerChunk.getChunkCoord(x),
+			SynchronizerChunk.getChunkCoord(z)
+		);
+
+		this.chunkManager.get(chunkId)
+			.blocks
+			.removeIf(
+				(currentBlock) -> (
+					currentBlock[0] == x
+					&& currentBlock[1] == y
+					&& currentBlock[2] == z
+				)
+			);
+
+		this.chunkManager.dirty(chunkId);
 	}
 
 	public void setMutable(Block block) {
@@ -27,6 +50,21 @@ public class SynchronizerMutabilityManager {
 			SynchronizerMutabilityManager.MUTABLE_METADATA_KEY,
 			new FixedMetadataValue(this.plugin, true)
 		);
+
+		int x = block.getX();
+		int y = block.getY();
+		int z = block.getZ();
+
+		long chunkId = SynchronizerChunk.getId(
+			SynchronizerChunk.getChunkCoord(x),
+			SynchronizerChunk.getChunkCoord(z)
+		);
+
+		this.chunkManager.get(chunkId)
+			.blocks
+			.add(new int[] { x, y, z });
+
+		this.chunkManager.dirty(chunkId);
 	}
 
 	public static boolean isMutable(Block block) {
