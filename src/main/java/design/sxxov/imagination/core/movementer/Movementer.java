@@ -50,7 +50,7 @@ public class Movementer implements Listener {
 	Plugin ctx;
 	Player player;
 	private String enabledWorldName;
-	private int[] sourceLocation;
+	private Location sourceLocation;
 	private int radius;
 	private boolean isPlayerAtEdge;
 	private final Listener listener = new MovementerOnPlayerMoveListener();
@@ -87,11 +87,7 @@ public class Movementer implements Listener {
 		}
 
 		Location location = event.getPlayer().getLocation();
-		this.sourceLocation = new int[] {
-			(int) location.getX(),
-			(int) location.getY(),
-			(int) location.getZ(),
-		};
+		this.sourceLocation = location;
 
 		this.register();
 	}
@@ -110,14 +106,7 @@ public class Movementer implements Listener {
 			return;
 		}
 
-		player.teleport(
-			new Location(
-				player.getWorld(),
-				(double) this.sourceLocation[0],
-				(double) this.sourceLocation[1],
-				(double) this.sourceLocation[2]
-			)
-		);
+		player.teleport(this.sourceLocation);
 	}
 
 	public void destroy() {
@@ -168,9 +157,9 @@ public class Movementer implements Listener {
 		};
 
 		return (int) Math.sqrt(
-			Math.pow(targetLocation[0] - this.sourceLocation[0], 2) 
-			+ Math.pow(targetLocation[1] - this.sourceLocation[1], 2) 
-			+ Math.pow(targetLocation[2] - this.sourceLocation[2], 2)
+			Math.pow(targetLocation[0] - this.sourceLocation.getBlockX(), 2) 
+			+ Math.pow(targetLocation[1] - this.sourceLocation.getBlockY(), 2) 
+			+ Math.pow(targetLocation[2] - this.sourceLocation.getBlockZ(), 2)
 		);
 	}
 }
