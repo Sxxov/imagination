@@ -8,35 +8,50 @@ import com.sk89q.worldedit.extent.Extent;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.world.block.BlockStateHolder;
 
-import org.bukkit.Location;
-import org.bukkit.block.Block;
+import org.bukkit.block.data.BlockData;
+
+import design.sxxov.imagination.core.synchronizer.SynchronizerChange;
+import design.sxxov.imagination.core.synchronizer.SynchronizerChangeManager;
+import design.sxxov.imagination.core.synchronizer.SynchronizerChunk;
 
 public class SynchronizeBlockChangeExtent extends BlockChangeExtent {
+	private SynchronizerChangeManager synchronizerChangeManager;
+	private Extent extent;
+
 	public SynchronizeBlockChangeExtent(
 		Extent extent,
 		Actor actor,
 		MultiverseWorld sourceWorld,
-		MultiverseWorld targetWorld
+		MultiverseWorld targetWorld,
+		SynchronizerChangeManager synchronizerChangeManager
 	) {
 		super(extent, actor, sourceWorld, targetWorld);
+
+		this.synchronizerChangeManager = synchronizerChangeManager;
+		this.extent = extent;
 	}
 	
 	@Override
 	public <T extends BlockStateHolder<T>> boolean setBlock(BlockVector3 location, T block) throws WorldEditException {
-		if (this.getIsEnabled()) {	
-			Block targetWorldBlock = new Location(
-				this.getTargetWorld().getCBWorld(), 
-				location.getX(), 
-				location.getY(), 
-				location.getZ()
-			)
-				.getBlock();
+		if (this.getIsEnabled()) {
+			int x = location.getBlockX();
+			int y = location.getBlockY();
+			int z = location.getBlockZ();
 			
-			targetWorldBlock.setType(BukkitAdapter.adapt(block.getBlockType()));
-			targetWorldBlock.getState().setBlockData(BukkitAdapter.adapt(block));
+			this.synchronizerChangeManager.batch(
+				new SynchronizerChange<BlockData>(
+					new int[] { x, y, z },
+					SynchronizerChunk.getId(
+						SynchronizerChunk.getChunkCoord(x),
+						SynchronizerChunk.getChunkCoord(z)
+					),
+					this.getTargetWorld().getCBWorld(),
+					BukkitAdapter.adapt(block)
+				)
+			);
 		}
 
-		return super.setBlock(location, block);
+		return this.extent.setBlock(location, block);
 	}
 
 	
