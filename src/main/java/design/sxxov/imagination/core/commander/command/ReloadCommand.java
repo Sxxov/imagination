@@ -11,8 +11,8 @@ public class ReloadCommand extends Command {
 	public boolean run(Player player, org.bukkit.command.Command command, String label, String[] args, Imagination ctx) {
 		Configurator.reload(ctx);
 
-		ctx.destroySynchronizers();
-		ctx.configure();
+		ctx.onDisable();
+		ctx.onEnable();
 
 		new CommanderReplyBuilder(player)
 			.info("Successfully reloaded")
