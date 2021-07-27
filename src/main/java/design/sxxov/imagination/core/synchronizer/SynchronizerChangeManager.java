@@ -5,31 +5,21 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BiConsumer;
 
 import javax.annotation.Nullable;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
-import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
-import org.bukkit.craftbukkit.v1_17_R1.CraftChunk;
-import org.bukkit.craftbukkit.v1_17_R1.block.data.CraftBlockData;
-import org.bukkit.craftbukkit.v1_17_R1.entity.CraftPlayer;
-import org.bukkit.entity.Player;
-
-import net.minecraft.core.BlockPosition;
-import net.minecraft.network.protocol.game.PacketPlayOutMapChunk;
-import net.minecraft.server.network.PlayerConnection;
 
 @SuppressWarnings("rawtypes")
 public class SynchronizerChangeManager {
 	private SynchronizerChunkManager chunkManager;
 	private SynchronizerMutabilityManager mutabilityManager;
 	private HashMap<World, HashMap<Long, ArrayList<SynchronizerChange>>> targetWorldToChunkIdToChangesBuffer = new HashMap<>();
+	private ArrayList<Long> threadBlockedChunkIds = new ArrayList<>();
 
 	public SynchronizerChangeManager(SynchronizerChunkManager chunkManager, SynchronizerMutabilityManager mutabilityManager) {
 		this.chunkManager = chunkManager;
@@ -65,6 +55,10 @@ public class SynchronizerChangeManager {
 	}
 
 	public CompletableFuture<Void> applyAsync(World world) {
+		return this.applyAsync(world, false);
+	}
+
+	public CompletableFuture<Void> applyAsync(World world, boolean lazy) {
 		CompletableFuture<Void> future = new CompletableFuture<Void>();
 		HashMap<Long, ArrayList<SynchronizerChange>> chunkIdToChanges = (
 			this.targetWorldToChunkIdToChangesBuffer.get(world)
@@ -77,6 +71,14 @@ public class SynchronizerChangeManager {
 		for (Map.Entry<Long, ArrayList<SynchronizerChange>> entry 
 			: chunkIdToChanges.entrySet()) {
 			long chunkId = entry.getKey();
+
+			int[] chunkCoords = SynchronizerChunk.getIdCoords(chunkId);
+
+			if (lazy 
+				&& !world.isChunkLoaded(chunkCoords[0], chunkCoords[1])) {
+				continue;
+			}
+
 			ArrayList<SynchronizerChange> changes = entry.getValue();
 			
 			future.thenRun(() -> this.applyAsync(
@@ -102,6 +104,8 @@ public class SynchronizerChangeManager {
 			return;
 		}
 
+		this.threadBlockedChunkIds.addAll(chunkIdToChanges.keySet());
+
 		for (Map.Entry<Long, ArrayList<SynchronizerChange>> entry 
 			: chunkIdToChanges.entrySet()) {
 			long chunkId = entry.getKey();
@@ -114,14 +118,18 @@ public class SynchronizerChangeManager {
 				entry.getValue(),
 				chunk
 			);
-
-			SynchronizerChangeManager.refreshChunk(chunk);
 		}
+
+		this.threadBlockedChunkIds.removeAll(chunkIdToChanges.keySet());
 
 		chunkIdToChanges.clear();
 	}
 
 	public void applySync(World world, Long chunkId, Chunk chunk) {
+		if (this.threadBlockedChunkIds.contains(chunkId)) {
+			return;
+		}
+
 		HashMap<Long, ArrayList<SynchronizerChange>> chunkIdToChanges = (
 			this.targetWorldToChunkIdToChangesBuffer.get(world)
 		);
@@ -138,15 +146,21 @@ public class SynchronizerChangeManager {
 		);
 
 		chunkIdToChanges.remove(chunkId);
-		SynchronizerChangeManager.refreshChunk(chunk);
 	}
 
-	public CompletableFuture<Void> applyAsync(World world, Long chunkId) {
+	public CompletableFuture<Void> applyAsync(World world, Long chunkId, boolean lazy) {
 		HashMap<Long, ArrayList<SynchronizerChange>> chunkIdToChanges = (
 			this.targetWorldToChunkIdToChangesBuffer.get(world)
 		);
 
 		if (chunkIdToChanges == null) {
+			return new CompletableFuture<>();
+		}
+
+		int[] chunkCoords = SynchronizerChunk.getIdCoords(chunkId);
+
+		if (lazy 
+			&& !world.isChunkLoaded(chunkCoords[0], chunkCoords[1])) {
 			return new CompletableFuture<>();
 		}
 
@@ -165,20 +179,17 @@ public class SynchronizerChangeManager {
 		int[] chunkCoords = SynchronizerChunk.getIdCoords(chunkId);
 
 		return world
-			.getChunkAtAsync(chunkCoords[0], chunkCoords[1])
+			.getChunkAtAsyncUrgently(chunkCoords[0], chunkCoords[1])
 			.thenAccept((chunk) -> {
 				this.applySync(world, chunkId, changes, chunk);
-				SynchronizerChangeManager.refreshChunk(chunk);
 			});
 	}
 
 	private void applySync(World world, Long chunkId, @Nullable ArrayList<SynchronizerChange> changes, Chunk chunk) {
-		ArrayList<int[]> currentBlocks = this.chunkManager.get(chunkId).blocks;
-
 		if (changes == null) {
 			return;
 		}
-				
+
 		for (SynchronizerChange change : changes) {
 			Block block = world.getBlockAt(
 				change.targetCoords[0],
@@ -191,14 +202,11 @@ public class SynchronizerChangeManager {
 			switch (change.type) {
 				case SynchronizerChange.BLOCK_DATA_TYPE:
 					material = ((BlockData) change.targetData).getMaterial();
-					// block.setType(material);
-					// block.setBlockData((BlockData) change.targetData);
-					SynchronizerChangeManager.setBlockFast(block, (BlockData) change.targetData, chunk);
+					block.setBlockData((BlockData) change.targetData);
 					break;
 				case SynchronizerChange.BLOCK_MATERIAL_TYPE:
 					material = (Material) change.targetData;
-					// block.setType(material);
-					SynchronizerChangeManager.setBlockFast(block, (Material) change.targetData, chunk);
+					block.setType(material);
 					break;
 				default:
 					new UnexpectedException("Unexpected change type(" + change.type + ")")
@@ -207,90 +215,12 @@ public class SynchronizerChangeManager {
 			}
 
 			if (material == Material.AIR) {
-				currentBlocks.removeIf(
-					(currentBlock) -> (
-						currentBlock[0] == change.targetCoords[0]
-						&& currentBlock[1] == change.targetCoords[1]
-						&& currentBlock[2] == change.targetCoords[2]
-					)
-				);
-
 				this.mutabilityManager.setMutable(block);
 			} else {
-				currentBlocks.add(change.targetCoords);
-
 				this.mutabilityManager.setImmutable(block);
 			}
 
 			this.chunkManager.dirty(chunkId);
 		}
 	}
-
-	public static void setBlockFast(Block block, Material material, Chunk chunk) {
-		SynchronizerChangeManager.setBlockFast(block, material.createBlockData(), chunk);
-	}
-
-	public static void setBlockFast(Block block, BlockData blockData, Chunk chunk) {
-		if (!(blockData instanceof CraftBlockData)) {
-			throw new IllegalArgumentException("Attempted to call setBlockFast with blockData that isn't instance of CraftBlockData");
-		}
-
-		net.minecraft.world.level.chunk.Chunk chunkNMS = ((CraftChunk) chunk).getHandle();
-		Location location = block.getLocation();
-
-		int x = location.getBlockX() & 0xf;
-		int y = location.getBlockY();
-		int z = location.getBlockZ() & 0xf;
-
-		chunkNMS.setType(
-			new BlockPosition(x, y, z),
-			((CraftBlockData) blockData).getState(),
-			false
-		);
-	}
-
-	public static boolean refreshChunk(Chunk chunk) {
-		return SynchronizerChangeManager.refreshChunk(
-			chunk.getWorld(),
-			chunk.getX(),
-			chunk.getZ()
-		);
-	}
-
-	@SuppressWarnings("deprecation")
-	public static boolean refreshChunk(World world, int x, int z) {
-		return world.refreshChunk(x, z);
-	}
-
-	//#region Yanked from https://www.spigotmc.org/threads/1-9-chunkcoordintpairqueue-symbol-not-found.129917/
-	private static void refreshPlayer(Player player) {
-		PlayerConnection connection = ((CraftPlayer) player).getHandle().b;
-
-        forEachChunkInFOV(player, (cx, cz) -> {
-			Chunk chunk = player.getWorld().getChunkAt(cx, cz);
-
-			// The client doesn't know about it yet so there is nothing to refresh
-			if (chunk == null 
-				|| !chunk.isLoaded()) {
-				return; 
-			}
-
-			connection.sendPacket(
-				new PacketPlayOutMapChunk(((CraftChunk) chunk).getHandle(), true)
-			);
-        });
-	}
-
-	private static void forEachChunkInFOV(Player player, BiConsumer<Integer, Integer> consumer) {
-        int playerChunkX = player.getLocation().getBlockX() / 16;
-        int playerChunkZ = player.getLocation().getBlockZ() / 16;
-        int viewDist = Bukkit.getViewDistance();
-
-        for (int cx = playerChunkX - viewDist; cx <= playerChunkX + viewDist; cx++) {
-            for (int cz = playerChunkZ - viewDist; cz <= playerChunkZ + viewDist; cz++) {
-                consumer.accept(cx, cz);
-            }
-        }
-    }
-	//#endregion
 }
