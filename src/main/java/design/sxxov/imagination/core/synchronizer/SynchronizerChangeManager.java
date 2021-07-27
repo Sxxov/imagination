@@ -3,7 +3,9 @@ package design.sxxov.imagination.core.synchronizer;
 import java.rmi.UnexpectedException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import javax.annotation.Nullable;
@@ -19,7 +21,7 @@ public class SynchronizerChangeManager {
 	private SynchronizerChunkManager chunkManager;
 	private SynchronizerMutabilityManager mutabilityManager;
 	private HashMap<World, HashMap<Long, ArrayList<SynchronizerChange>>> targetWorldToChunkIdToChangesBuffer = new HashMap<>();
-	private ArrayList<Long> threadBlockedChunkIds = new ArrayList<>();
+	private HashSet<Long> threadBlockedChunkIds = new HashSet<>();
 
 	public SynchronizerChangeManager(SynchronizerChunkManager chunkManager, SynchronizerMutabilityManager mutabilityManager) {
 		this.chunkManager = chunkManager;
@@ -104,7 +106,9 @@ public class SynchronizerChangeManager {
 			return;
 		}
 
-		this.threadBlockedChunkIds.addAll(chunkIdToChanges.keySet());
+		Set<Long> chunkIds = chunkIdToChanges.keySet();
+
+		this.threadBlockedChunkIds.addAll(chunkIds);
 
 		for (Map.Entry<Long, ArrayList<SynchronizerChange>> entry 
 			: chunkIdToChanges.entrySet()) {
@@ -120,7 +124,7 @@ public class SynchronizerChangeManager {
 			);
 		}
 
-		this.threadBlockedChunkIds.removeAll(chunkIdToChanges.keySet());
+		this.threadBlockedChunkIds.removeAll(chunkIds);
 
 		chunkIdToChanges.clear();
 	}
