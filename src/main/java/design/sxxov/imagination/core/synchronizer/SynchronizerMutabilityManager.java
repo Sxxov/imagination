@@ -2,6 +2,7 @@ package design.sxxov.imagination.core.synchronizer;
 
 import java.util.List;
 
+import org.bukkit.Chunk;
 import org.bukkit.block.Block;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.metadata.MetadataValue;
@@ -15,6 +16,20 @@ public class SynchronizerMutabilityManager {
 	public SynchronizerMutabilityManager(Plugin plugin, SynchronizerChunkManager chunkManager) {
 		this.plugin = plugin;
 		this.chunkManager = chunkManager;
+	}
+
+	public void applySync(Chunk chunk) {
+		long chunkId = SynchronizerChunk.getId(chunk);
+
+		for (int[] coords : this.chunkManager.get(chunkId).blocks) {
+			chunk
+				.getWorld()
+				.getBlockAt(coords[0], coords[1], coords[2])
+				.setMetadata(
+					SynchronizerMutabilityManager.MUTABLE_METADATA_KEY,
+					new FixedMetadataValue(this.plugin, true)
+				);
+		}
 	}
 
 	public void setImmutable(Block block) {
