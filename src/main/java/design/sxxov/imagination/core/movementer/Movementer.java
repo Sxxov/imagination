@@ -107,6 +107,7 @@ public class Movementer implements Listener {
 		}
 
 		Location location = event.getPlayer().getLocation();
+		location.setWorld(event.getTargetWorld().getCBWorld());
 		this.sourceLocation = location;
 
 		this.register();
