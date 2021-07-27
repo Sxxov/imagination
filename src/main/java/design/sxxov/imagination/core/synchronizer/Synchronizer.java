@@ -47,6 +47,7 @@ import org.bukkit.event.inventory.BrewEvent;
 import org.bukkit.event.inventory.BrewingStandFuelEvent;
 import org.bukkit.event.inventory.FurnaceBurnEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
+import org.bukkit.event.world.ChunkPopulateEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.plugin.Plugin;
 
@@ -231,11 +232,17 @@ public class Synchronizer implements Listener {
 		if (world.getName().equals(this.targetWorldName)) {
 			// this.changeManager.applyAsync(world, chunkId);
 			this.changeManager.applySync(world, chunkId, chunk);
-			this.mutabilityManager.applySync(chunk);
 		}
 
 		if (world.getName().equals(this.sourceWorldName)) {
 			this.chunkManager.hydrate(chunkId);
+		}
+	}
+
+	@EventHandler
+	public void onChunkPopulate(ChunkPopulateEvent event) {
+		if (event.getWorld().getName().equals(this.targetWorldName)) {
+			this.mutabilityManager.applySync(event.getChunk());
 		}
 	}
 
