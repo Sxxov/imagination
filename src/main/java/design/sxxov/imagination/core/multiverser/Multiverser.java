@@ -53,6 +53,7 @@ public class Multiverser {
 			throw new CloneFailedException("Failed to clone world(" + world.getName() + ") to world(" + newName + ")");
 		}
 
+		newWorld.setKeepSpawnInMemory(false);
 		newWorld.setGameMode(GameMode.CREATIVE);
 		newWorld.getCBWorld().setFullTime(world.getCBWorld().getFullTime());
 
