@@ -126,6 +126,9 @@ public class SynchronizerChangeManager {
 	}
 
 	public void applySync(World world, Long chunkId, Chunk chunk) {
+		// safeguard against infinite loop if chunk provided is from an
+		// unloaded chunk from a ChunkLoadEvent handler
+		// this causes a stack overflow exception if unchecked
 		if (this.threadBlockedChunkIds.contains(chunkId)) {
 			return;
 		}
@@ -138,6 +141,8 @@ public class SynchronizerChangeManager {
 			return;
 		}
 
+		this.threadBlockedChunkIds.add(chunkId);
+
 		this.applySync(
 			world,
 			chunkId,
@@ -146,6 +151,7 @@ public class SynchronizerChangeManager {
 		);
 
 		chunkIdToChanges.remove(chunkId);
+		this.threadBlockedChunkIds.remove(chunkId);
 	}
 
 	public CompletableFuture<Void> applyAsync(World world, Long chunkId, boolean lazy) {
