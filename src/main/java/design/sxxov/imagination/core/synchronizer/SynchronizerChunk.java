@@ -45,4 +45,8 @@ public class SynchronizerChunk implements Serializable {
 	public static int getChunkCoord(int coord) {
 		return (int) Math.ceil((double) coord / 16);
 	}
+
+	public static int getLocalCoord(int worldCoord) {
+		return worldCoord & 0xf;
+	}
 }
