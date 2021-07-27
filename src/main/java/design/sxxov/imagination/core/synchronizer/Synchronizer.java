@@ -78,7 +78,7 @@ public class Synchronizer implements Listener {
 		this.sourceWorldName = sourceWorld.getName();
 		this.targetWorldName = targetWorld.getName();
 		this.chunkManager = new SynchronizerChunkManager(this.ctx, targetWorld.getName());
-		this.mutabilityManager = new SynchronizerMutabilityManager(this.ctx);
+		this.mutabilityManager = new SynchronizerMutabilityManager(this.ctx, this.chunkManager);
 		this.changeManager = new SynchronizerChangeManager(this.chunkManager, this.mutabilityManager);
 
 		if (Bukkit.getServer().getPluginManager().getPlugin("WorldEdit") != null) {
@@ -108,7 +108,8 @@ public class Synchronizer implements Listener {
 						event.getExtent(), 
 						event.getActor(),
 						this.sourceWorld,
-						this.targetWorld
+						this.targetWorld,
+						this.changeManager
 					),
 					event.getActor(),
 					this.sourceWorld,
@@ -243,13 +244,23 @@ public class Synchronizer implements Listener {
 		Long chunkId = SynchronizerChunk.getId(event.getChunk());
 
 		if (world.getName().equals(this.sourceWorldName)) {
-			this.changeManager.applyAsync(world, chunkId);
+			this.changeManager.applyAsync(world, chunkId, false);
 		}
 	}
 	
 	@EventHandler
 	public void onBlockPlace(BlockPlaceEvent event) {
 		Block block = event.getBlock();
+		BlockState blockReplacedState = event.getBlockReplacedState();
+
+		// for when being placed on things like snow
+		if (blockReplacedState.getType() != Material.AIR
+			&& this.shouldBeCancelled(blockReplacedState.getBlock())) {
+			event.setCancelled(true);
+			Command.getBlockCancelledReply(event.getPlayer()).scheduleNextTickSingleton(this.ctx);
+
+			return;
+		}
 
 		this.onGeneric(block);
 
