@@ -7,6 +7,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.plugin.Plugin;
 
 import design.sxxov.imagination.core.commander.CommanderReply;
@@ -43,6 +44,25 @@ public class Movementer implements Listener {
 				if (me.isPlayerAtEdge) {
 					me.isPlayerAtEdge = false;
 				}
+			}
+		}
+
+		@EventHandler
+		public void onPlayerTeleport(PlayerTeleportEvent event) {
+			Movementer me = Movementer.this;
+
+			if (!event.getPlayer().getWorld().getName().equals(me.enabledWorldName)) {
+				me.unregister();
+
+				return;
+			}
+
+			int distanceFromToToSource = me.getDistanceFromSource(event.getTo());
+
+			if (distanceFromToToSource >= me.radius) {
+				event.setCancelled(true);
+
+				me.atEdgeReply.send();
 			}
 		}
 	}
