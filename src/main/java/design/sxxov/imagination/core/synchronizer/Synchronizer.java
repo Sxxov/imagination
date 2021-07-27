@@ -231,6 +231,7 @@ public class Synchronizer implements Listener {
 		if (world.getName().equals(this.targetWorldName)) {
 			// this.changeManager.applyAsync(world, chunkId);
 			this.changeManager.applySync(world, chunkId, chunk);
+			this.mutabilityManager.applySync(chunk);
 		}
 
 		if (world.getName().equals(this.sourceWorldName)) {
