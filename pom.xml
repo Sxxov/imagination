@@ -40,6 +40,20 @@
       <version>4.11</version>
       <scope>test</scope>
     </dependency>
+    <!-- 
+      How to get the following dependency working:
+      1. Goto a folder with a paper-1.17.1-XXX.jar (from https://papermc.io/downloads)
+      2. Run `java -Dpaperclip.install=true -jar paper-1.17.1-XXX.jar`
+      3. Copy "~/.m2/repository/io/papermc/paper/paper-api/1.17.1-R0.1-SNAPSHOT/paper-api-1.17.1-R0.1-SNAPSHOT-sources.jar"
+      4. Paste "~/.m2/repository/io/papermc/paper/paper/1.17.1-R0.1-SNAPSHOT/paper-1.17.1-R0.1-SNAPSHOT-sources.jar"
+      5. OPTIONAL: Repeat 3 & 4 with *-javadoc.jar
+    -->
+    <!-- <dependency>
+      <groupId>io.papermc.paper</groupId>
+      <artifactId>paper</artifactId>
+      <version>1.17.1-R0.1-SNAPSHOT</version>
+      <scope>provided</scope>
+    </dependency> -->
     <dependency>
       <groupId>io.papermc.paper</groupId>
       <artifactId>paper-api</artifactId>
@@ -123,6 +137,9 @@
         <plugin>
           <artifactId>maven-surefire-plugin</artifactId>
           <version>2.22.1</version>
+          <configuration>
+            <skipTests>true</skipTests>
+          </configuration>
         </plugin>
         <plugin>
           <artifactId>maven-jar-plugin</artifactId>
