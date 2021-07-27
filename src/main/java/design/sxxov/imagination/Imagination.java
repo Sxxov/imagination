@@ -77,7 +77,7 @@ public class Imagination extends JavaPlugin implements Listener {
                 if (targetWorld == null) {
                     Imagination.logger.info("Creating new target world(" + targetWorldName + ") from source world(" + sourceWorldName + ")");
 
-                    targetWorld = Multiverser.cloneMVWorld(sourceWorld, targetWorldName);
+                    targetWorld = Multiverser.createImaginationWorld(sourceWorld, targetWorldName);
                 }
 
                 this.synchronizers.add(

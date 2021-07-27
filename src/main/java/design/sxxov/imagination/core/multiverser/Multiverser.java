@@ -28,7 +28,10 @@ public class Multiverser {
 		Multiverser.mv = (MultiverseCore) plugin;
 	}
 
-	public static MultiverseWorld cloneMVWorld(@NotNull MultiverseWorld world, String newName) {
+	public static MultiverseWorld cloneMVWorld(
+		@NotNull MultiverseWorld world,
+		String newName
+	) throws CloneFailedException {
 		int lastIndexOfSlashForward = newName.lastIndexOf("/");
 		int lastIndexOfSlashBackward = newName.lastIndexOf("\\");
 		int lastIndexOfDelimiter = lastIndexOfSlashForward == -1 
@@ -53,9 +56,18 @@ public class Multiverser {
 			throw new CloneFailedException("Failed to clone world(" + world.getName() + ") to world(" + newName + ")");
 		}
 
+		return newWorld;
+	}
+
+	public static MultiverseWorld createImaginationWorld(
+		@NotNull MultiverseWorld sourceWorld,
+		String targetWorldName
+	) throws CloneFailedException {
+		MultiverseWorld newWorld = Multiverser.cloneMVWorld(sourceWorld, targetWorldName);
+
 		newWorld.setKeepSpawnInMemory(false);
 		newWorld.setGameMode(GameMode.CREATIVE);
-		newWorld.getCBWorld().setFullTime(world.getCBWorld().getFullTime());
+		newWorld.getCBWorld().setFullTime(sourceWorld.getCBWorld().getFullTime());
 
 		return newWorld;
 	}
