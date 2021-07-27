@@ -73,7 +73,7 @@ public class ToCommand extends Command {
 			.findAny()
 			.orElseThrow()
 			.getChangeManager()
-			.applySync(targetWorld.getCBWorld());
+			.applyAsync(targetWorld.getCBWorld(), true);
 
 		Command.teleportToWorld(player, targetWorld);
 
