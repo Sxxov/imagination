@@ -10,22 +10,26 @@ import java.util.concurrent.CompletableFuture;
 
 import javax.annotation.Nullable;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.plugin.Plugin;
 
 @SuppressWarnings("rawtypes")
 public class SynchronizerChangeManager {
 	private SynchronizerChunkManager chunkManager;
 	private SynchronizerMutabilityManager mutabilityManager;
 	private HashMap<World, HashMap<Long, ArrayList<SynchronizerChange>>> targetWorldToChunkIdToChangesBuffer = new HashMap<>();
-	private HashSet<Long> threadBlockedChunkIds = new HashSet<>();
+	private HashSet<Long> chunkIdsBeingApplied = new HashSet<>();
+	private Plugin plugin;
 
-	public SynchronizerChangeManager(SynchronizerChunkManager chunkManager, SynchronizerMutabilityManager mutabilityManager) {
+	public SynchronizerChangeManager(Plugin plugin, SynchronizerChunkManager chunkManager, SynchronizerMutabilityManager mutabilityManager) {
 		this.chunkManager = chunkManager;
 		this.mutabilityManager = mutabilityManager;
+		this.plugin = plugin;
 	}
 
 	public void batch(SynchronizerChange change) {
@@ -67,7 +71,7 @@ public class SynchronizerChangeManager {
 		);
 
 		if (chunkIdToChanges == null) {
-			return new CompletableFuture<>();
+			return CompletableFuture.completedFuture(null);
 		}
 
 		for (Map.Entry<Long, ArrayList<SynchronizerChange>> entry 
@@ -108,7 +112,7 @@ public class SynchronizerChangeManager {
 
 		Set<Long> chunkIds = chunkIdToChanges.keySet();
 
-		this.threadBlockedChunkIds.addAll(chunkIds);
+		this.chunkIdsBeingApplied.addAll(chunkIds);
 
 		for (Map.Entry<Long, ArrayList<SynchronizerChange>> entry 
 			: chunkIdToChanges.entrySet()) {
@@ -124,7 +128,7 @@ public class SynchronizerChangeManager {
 			);
 		}
 
-		this.threadBlockedChunkIds.removeAll(chunkIds);
+		this.chunkIdsBeingApplied.removeAll(chunkIds);
 
 		chunkIdToChanges.clear();
 	}
@@ -133,7 +137,7 @@ public class SynchronizerChangeManager {
 		// safeguard against infinite loop if chunk provided is from an
 		// unloaded chunk from a ChunkLoadEvent handler
 		// this causes a stack overflow exception if unchecked
-		if (this.threadBlockedChunkIds.contains(chunkId)) {
+		if (this.chunkIdsBeingApplied.contains(chunkId)) {
 			return;
 		}
 
@@ -145,7 +149,7 @@ public class SynchronizerChangeManager {
 			return;
 		}
 
-		this.threadBlockedChunkIds.add(chunkId);
+		this.chunkIdsBeingApplied.add(chunkId);
 
 		this.applySync(
 			world,
@@ -155,7 +159,7 @@ public class SynchronizerChangeManager {
 		);
 
 		chunkIdToChanges.remove(chunkId);
-		this.threadBlockedChunkIds.remove(chunkId);
+		this.chunkIdsBeingApplied.remove(chunkId);
 	}
 
 	public CompletableFuture<Void> applyAsync(World world, Long chunkId, boolean lazy) {
@@ -164,14 +168,14 @@ public class SynchronizerChangeManager {
 		);
 
 		if (chunkIdToChanges == null) {
-			return new CompletableFuture<>();
+			return CompletableFuture.completedFuture(null);
 		}
 
 		int[] chunkCoords = SynchronizerChunk.getIdCoords(chunkId);
 
 		if (lazy 
 			&& !world.isChunkLoaded(chunkCoords[0], chunkCoords[1])) {
-			return new CompletableFuture<>();
+			return CompletableFuture.completedFuture(null);
 		}
 
 		ArrayList<SynchronizerChange> changes = chunkIdToChanges.get(chunkId);
@@ -185,14 +189,57 @@ public class SynchronizerChangeManager {
 		);
 	}
 
+	public CompletableFuture<Void> applyAsync(World world, Long chunkId, Chunk chunk) {
+		HashMap<Long, ArrayList<SynchronizerChange>> chunkIdToChanges = (
+			this.targetWorldToChunkIdToChangesBuffer.get(world)
+		);
+
+		if (chunkIdToChanges == null) {
+			return CompletableFuture.completedFuture(null);
+		}
+
+		ArrayList<SynchronizerChange> changes = chunkIdToChanges.get(chunkId);
+
+		chunkIdToChanges.remove(chunkId);
+
+		return this.applyAsync(world, chunkId, changes, chunk);
+	}
+
 	private CompletableFuture<Void> applyAsync(World world, Long chunkId, ArrayList<SynchronizerChange> changes) {
 		int[] chunkCoords = SynchronizerChunk.getIdCoords(chunkId);
 
 		return world
 			.getChunkAtAsyncUrgently(chunkCoords[0], chunkCoords[1])
-			.thenAccept((chunk) -> {
-				this.applySync(world, chunkId, changes, chunk);
+			.thenCompose((chunk) -> {
+				return this.applyAsync(world, chunkId, changes, chunk);
 			});
+	}
+
+	private CompletableFuture<Void> applyAsync(World world, Long chunkId, ArrayList<SynchronizerChange> changes, Chunk chunk) {
+		CompletableFuture<Void> future = new CompletableFuture<>();
+		
+		int i = 0;
+		Bukkit.getScheduler().runTask(this.plugin, new Runnable() {
+			@Override
+			public void run() {
+				int changesSliceSize = changes.size() - 1 - i;
+
+				if (changesSliceSize <= 0) {
+					future.complete(null);
+
+					return;
+				}
+
+				ArrayList<SynchronizerChange> changesSlice = (ArrayList<SynchronizerChange>) changes
+					.subList(i, i + Math.min(changesSliceSize, 100));
+
+				SynchronizerChangeManager.this.applySync(world, chunkId, changesSlice, chunk);
+
+				Bukkit.getScheduler().runTask(SynchronizerChangeManager.this.plugin, this);
+			}
+		});
+
+		return future;
 	}
 
 	private void applySync(World world, Long chunkId, @Nullable ArrayList<SynchronizerChange> changes, Chunk chunk) {
@@ -200,12 +247,21 @@ public class SynchronizerChangeManager {
 			return;
 		}
 
+		this.chunkIdsBeingApplied.add(chunkId);
+
 		for (SynchronizerChange change : changes) {
 			Block block = world.getBlockAt(
 				change.targetCoords[0],
 				change.targetCoords[1],
 				change.targetCoords[2]
 			);
+
+			if (!world.isChunkLoaded(chunk.getX(), chunk.getZ())) {
+				new UnexpectedException("Chunk(" + chunkId + ") was not loaded before being passed into applySync")
+					.printStackTrace();
+
+				return;
+			}
 
 			Material material;
 
@@ -229,8 +285,9 @@ public class SynchronizerChangeManager {
 			} else {
 				this.mutabilityManager.setImmutable(block);
 			}
-
-			this.chunkManager.dirty(chunkId);
 		}
+
+		this.chunkManager.dirty(chunkId);
+		this.chunkIdsBeingApplied.remove(chunkId);
 	}
 }

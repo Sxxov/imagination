@@ -18,6 +18,7 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.type.Dispenser;
 import org.bukkit.entity.EntityType;
 import org.bukkit.event.Cancellable;
 import org.bukkit.event.EventHandler;
@@ -80,7 +81,7 @@ public class Synchronizer implements Listener {
 		this.targetWorldName = targetWorld.getName();
 		this.chunkManager = new SynchronizerChunkManager(this.ctx, targetWorld.getName());
 		this.mutabilityManager = new SynchronizerMutabilityManager(this.ctx, this.chunkManager);
-		this.changeManager = new SynchronizerChangeManager(this.chunkManager, this.mutabilityManager);
+		this.changeManager = new SynchronizerChangeManager(this.ctx, this.chunkManager, this.mutabilityManager);
 
 		if (Bukkit.getServer().getPluginManager().getPlugin("WorldEdit") != null) {
 			this.worldEdit = WorldEdit.getInstance();
@@ -229,9 +230,12 @@ public class Synchronizer implements Listener {
 		Chunk chunk = event.getChunk();
 		Long chunkId = SynchronizerChunk.getId(chunk);
 
+		// TODO: test new tick based async change application
+		// TODO: try to reproduce recursive loop
+
 		if (world.getName().equals(this.targetWorldName)) {
-			// this.changeManager.applyAsync(world, chunkId);
-			this.changeManager.applySync(world, chunkId, chunk);
+			this.changeManager.applyAsync(world, chunkId, chunk);
+			// this.changeManager.applySync(world, chunkId, chunk);
 		}
 
 		if (world.getName().equals(this.sourceWorldName)) {
@@ -387,7 +391,17 @@ public class Synchronizer implements Listener {
 
 	@EventHandler
 	public void onBlockDispense(BlockDispenseEvent event) {
-		this.onCancellableGeneric(event, event.getBlock());
+		Block block = event.getBlock();
+		Material material = block.getType();
+
+		if (material == Material.WATER_BUCKET
+			|| material == Material.LAVA_BUCKET
+			|| material == Material.BUCKET) {
+			Dispenser dispenser = (Dispenser) block.getBlockData();
+			Block targetBlock = block.getRelative(dispenser.getFacing());
+
+			this.onCancellableGeneric(event, targetBlock);
+		}
 	}
 
 	@EventHandler
