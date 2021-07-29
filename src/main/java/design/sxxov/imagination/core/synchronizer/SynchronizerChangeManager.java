@@ -268,7 +268,7 @@ public class SynchronizerChangeManager {
 			switch (change.type) {
 				case SynchronizerChange.BLOCK_DATA_TYPE:
 					material = ((BlockData) change.targetData).getMaterial();
-					block.setBlockData((BlockData) change.targetData);
+					block.setBlockData((BlockData) change.targetData, false);
 					break;
 				case SynchronizerChange.BLOCK_MATERIAL_TYPE:
 					material = (Material) change.targetData;
