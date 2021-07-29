@@ -2,6 +2,7 @@ design\sxxov\imagination\core\synchronizer\SynchronizerChunkManager.class
 design\sxxov\imagination\core\commander\command\Command.class
 design\sxxov\imagination\core\commander\command\RealityCommand.class
 design\sxxov\imagination\core\commander\CommanderReplyBuilder.class
+design\sxxov\imagination\core\synchronizer\SynchronizerChangeManager$1.class
 design\sxxov\imagination\events\ImaginationTeleportEvent.class
 design\sxxov\imagination\core\synchronizer\Synchronizer.class
 design\sxxov\imagination\core\synchronizer\SynchronizerChangeManager.class
@@ -13,6 +14,7 @@ design\sxxov\imagination\core\worldedit\SynchronizeBlockChangeExtent.class
 design\sxxov\imagination\events\ImaginationExitEvent.class
 design\sxxov\imagination\core\commander\command\EmptyCommand.class
 design\sxxov\imagination\core\synchronizer\SynchronizerChunk.class
+design\sxxov\imagination\core\commander\command\DistortCommand.class
 design\sxxov\imagination\core\commander\command\UnknownCommand.class
 design\sxxov\imagination\core\configurator\ConfiguratorImagination$ConfigurationImaginationPlayerMovement.class
 design\sxxov\imagination\core\worldedit\BlockChangeExtent.class

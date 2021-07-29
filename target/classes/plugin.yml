@@ -14,6 +14,8 @@ commands:
   reality:
     description: "Alias for `/imagination reality`"
     aliases: [real, rel]
-    permission: imagination.reality
     usage: "/<command>"
-    permission-message: "You do not have permission to reenter reality"
+  distort:
+    description: "Alias for `/imagination distort`"
+    aliases: []
+    usage: "/<command> [enable|disable]"

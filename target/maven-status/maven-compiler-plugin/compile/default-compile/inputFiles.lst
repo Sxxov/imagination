@@ -24,6 +24,7 @@ C:\__Projects\VS Code\imagination\src\main\java\design\sxxov\imagination\core\sy
 C:\__Projects\VS Code\imagination\src\main\java\design\sxxov\imagination\core\configurator\Configurator.java
 C:\__Projects\VS Code\imagination\src\main\java\design\sxxov\imagination\core\commander\command\UnknownCommand.java
 C:\__Projects\VS Code\imagination\src\main\java\design\sxxov\imagination\core\commander\command\Command.java
+C:\__Projects\VS Code\imagination\src\main\java\design\sxxov\imagination\core\commander\command\DistortCommand.java
 C:\__Projects\VS Code\imagination\src\main\java\design\sxxov\imagination\core\commander\CommanderReplyBuilder.java
 C:\__Projects\VS Code\imagination\src\main\java\design\sxxov\imagination\core\synchronizer\SynchronizerChange.java
 C:\__Projects\VS Code\imagination\src\main\java\design\sxxov\imagination\resources\utilities\StreamToByteArrayUtility.java
